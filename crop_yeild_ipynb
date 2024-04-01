@@ -1,0 +1,356 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+def normalize_z(dfin, columns_means=None, columns_stds=None):
+    dfout = dfin.copy()
+    
+    if columns_means is None:
+        columns_means = dfout.mean(axis=0) 
+        
+    if columns_stds is None:
+        columns_stds = dfout.std(axis=0)
+        
+    dfout = (dfout - columns_means) / columns_stds
+    
+    return dfout, columns_means, columns_stds
+
+def get_features_targets(df, feature_names, target_names):
+    df_feature=df[feature_names]
+    df_target=df[target_names]
+    return df_feature, df_target
+
+def calc_linreg(X, beta):
+    return np.matmul(X,beta)
+
+def compute_cost_linreg(X, y, beta):
+    J = 0
+    m=X.shape[0]
+    y_hat=calc_linreg(X,beta)
+    err=y_hat-y
+    sq_sum=np.matmul(err.T,err)
+    J=sq_sum/(m*2)
+    J=J[0][0]
+    return J
+
+def prepare_feature(df_feature):
+    rows,col=df_feature.shape
+    if type(df_feature)==pd.DataFrame:
+        np_feature=df_feature.to_numpy()
+    else:
+        np_feature=df_feature
+    feature=np_feature.reshape(-1,col)
+    x0=np.ones((rows,1))
+    X=np.concatenate((x0,feature),axis=1)
+    return X
+def prepare_target(df_target):
+    rows,col=df_target.shape
+    if type(df_target)==pd.DataFrame:
+        np_target=df_target.to_numpy()
+    else:
+        np_target=df_target
+    target=np_target.reshape(-1,col)
+    return target
+def r2_score(y, ypred):
+    err=y-ypred
+    ss_res=np.matmul(err.T,err)
+    y_bar=np.mean(y)
+    y_s=y-y_bar
+    ss_tot=np.matmul(y_s.T,y_s)
+    return 1- ss_res/ss_tot
+
+
+def mean_squared_error(target, pred):
+    target,pred=np.array(target),np.array(pred)
+    n=target.shape[0]
+    err=target-pred
+    sq=np.matmul(err.T, err)
+    return sq/n
+
+def gradient_descent_linreg(X, y, beta, alpha, num_iters):
+    m=X.shape[0]
+    J_storage=[]
+    for i in range(num_iters):
+        j=compute_cost_linreg(X,y,beta)
+        J_storage.append(j)
+        y_hat=calc_linreg(X,beta)
+        err=y_hat-y
+        deriv=np.matmul(X.T,err)/m
+        beta=beta-alpha*deriv
+    return beta, J_storage
+
+
+def predict_linreg(df_feature, beta, means=None, stds=None):
+    df_feature,means,stds=normalize_z(df_feature,means,stds)
+    feature=prepare_feature(df_feature)
+    return calc_linreg(feature,beta)
+
+def split_data(df_feature, df_target, random_state=None, test_size=0.6):
+    indexes=df_feature.index
+    if random_state is not None:
+        np.random.seed(random_state)
+    k=int(test_size*len(indexes))
+    test_indexes=np.random.choice(indexes, k, replace=False)
+    train_indexes=list(set(indexes)-set(test_indexes))
+    train_indexes, test_indexes=sorted(train_indexes), sorted(test_indexes)
+    df_feature_train=df_feature.loc[train_indexes, :]
+    df_feature_test=df_feature.loc[test_indexes, :]
+    df_target_train =df_target.loc[train_indexes, :]
+    df_target_test = df_target.loc[test_indexes, :]
+                                    
+    return df_feature_train, df_feature_test, df_target_train, df_target_test
+
+#dataset defining
+df_rainfall = pd.read_csv('rainfall_india.csv', index_col=0)
+df_nitrogen = pd.read_csv('nvalue_per_area.csv', index_col=0)
+df_temp = pd.read_csv('temp_india.csv', index_col=0)
+df_yield = pd.read_csv('rice_yield_india.csv', index_col=0)
+df_potash = pd.read_csv('kvalue_per_area.csv', index_col=0)
+df_phosphate = pd.read_csv('pvalue_per_area.csv', index_col=0)
+
+# creating a new dataset and cleaning
+df_rainfall = df_rainfall.rename(columns={'ANNUAL': 'Rainfall'})
+df_nitrogen = df_nitrogen.rename(columns={'Value': 'Nutrients_N'})
+df_temp = df_temp.rename(columns={'ANNUAL': 'Temp'})
+df_potash = df_potash.rename(columns={'Value': 'Nutrients_P'})
+df_yield = df_yield.rename(columns={'Value': 'Yield'})
+df_phosphate = df_phosphate.rename(columns={'Value': 'Nutrients_Ph'})
+
+print("\nRainfall (mm)")
+print(df_rainfall.describe())
+
+print("\nNitrogen fertiliser used per cropland area -India")
+print(df_nitrogen.describe())
+
+print("\nTemperature-India")
+print(df_temp.describe())
+
+print("\nRice Yield in India")
+print(df_yield.describe())
+
+print("\nPottasium fertiliser used per cropland area -India")
+print(df_potash.describe())
+
+print("\nPhosphorus fertiliser used per cropland area -India")
+print(df_phosphate.describe())
+
+# Set up subplots with 1 row and 2 columns
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 5))
+
+# Plot Rice Yield
+df_rice = df_yield[df_yield['Year'] % 5 == 0]
+axes[0].plot(df_rice['Year'], df_rice['Yield'], label='Rice Yield in India')
+axes[0].set_xlabel('Year')
+axes[0].set_ylabel('Rice Yield (100g/ha)')
+axes[0].set_title('Rice Yield Over Years in India')
+axes[0].legend()
+
+# Plot Rainfall
+filtered_rainfall = df_rainfall[df_rainfall['YEAR'] % 5 == 0]
+axes[1].plot(filtered_rainfall['YEAR'], filtered_rainfall['Rainfall'], label='Rainfall (mm)')
+axes[1].set_xlabel('Year')
+axes[1].set_ylabel('Rainfall (mm)')
+axes[1].set_title('Rainfall Over Years in India')
+axes[1].legend()
+
+# Adjust layout for better spacing
+plt.tight_layout()
+
+# Display the plots
+plt.show()
+
+# Filter DataFrame for the selected years
+filtered_nitrogen = df_nitrogen[df_nitrogen['Year'] % 5 == 0]
+filtered_phosphate = df_phosphate[df_phosphate['Year'] % 5 == 0]
+filtered_potash = df_potash[df_potash['Year'] % 5 == 0]
+
+# Set up subplots with 1 row and 3 columns
+fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 5))
+
+# Plot Nitrogen Content
+axes[0].plot(filtered_nitrogen['Year'], filtered_nitrogen['Nutrients_N'], label='Nitrogen Content')
+axes[0].set_xlabel('Year')
+axes[0].set_ylabel('Nitrogen Content (tonnes)')
+axes[0].set_title('Nitrogen  Over Years in India')
+axes[0].legend()
+
+# Plot Phosphorus Content
+axes[1].plot(filtered_phosphate['Year'], filtered_phosphate['Nutrients_Ph'], label='Phosphorus Content')
+axes[1].set_xlabel('Year')
+axes[1].set_ylabel('Phosphorus Content (tonnes)')
+axes[1].set_title('Phosphorus Content Over Years in India')
+axes[1].legend()
+
+# Plot Potassium Content
+axes[2].plot(filtered_potash['Year'], filtered_potash['Nutrients_P'], label='Potassium Content')
+axes[2].set_xlabel('Year')
+axes[2].set_ylabel('Potassium Content (mm)')
+axes[2].set_title('Potassium Content Over Years in India')
+axes[2].legend()
+
+# Adjust layout for better spacing
+plt.tight_layout()
+
+# Display the plots
+plt.show()
+
+# Reset indices
+df_rainfall.reset_index(inplace=True)
+df_nitrogen.reset_index(inplace=True)
+df_temp.reset_index(inplace=True)
+df_yield.reset_index(inplace=True)
+df_potash.reset_index(inplace=True)
+df_phosphate.reset_index(inplace=True)
+
+#Selection of data from 1961 to 2015
+new_temp=df_temp['Temp'][(df_temp['YEAR'] >= 1961) & (df_temp['YEAR'] <= 2021)].reset_index(drop=True)
+new_r=df_rainfall['Rainfall'][(df_rainfall['YEAR'] >= 1961) & (df_rainfall['YEAR'] <= 2021)].reset_index(drop=True)
+df_combined = pd.concat([new_r, new_temp, df_yield['Yield'],df_potash['Nutrients_P'],df_phosphate['Nutrients_Ph'],df_nitrogen['Nutrients_N'],df_yield['Year']], axis=1)
+df_combined['Yield'] = df_combined['Yield'] / 1000
+
+empty_rows = df_combined[df_combined.isnull().any(axis=1)]
+
+# Print the rows with empty values
+print("No of empty rows : ",empty_rows.shape)
+
+#drop empty rows
+df_combined = df_combined.dropna()
+
+# Display the resulting DataFrame
+print(df_combined)
+
+from scipy.stats import zscore
+
+# Calculate z-scores only for numeric columns
+numeric_columns = df_combined.select_dtypes(include=[np.number]).columns
+z_scores = zscore(df_combined[numeric_columns])
+
+# Identify outliers based on z-scores
+outliers = (np.abs(z_scores) > 1.5).all(axis=1)
+print("Number of outliers:", outliers.sum())
+
+# Plot a correlation matrix heatmap
+correlation_matrix = df_combined.corr()
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f')
+plt.title('Correlation Matrix')
+plt.show()
+
+# get features and targets from data frame
+df_feature, df_target = get_features_targets(df_combined,["Rainfall","Temp","Nutrients_N","Nutrients_P","Nutrients_Ph"],["Yield"])
+
+# split the data into training and test data sets
+df_feature_train, df_feature_test, df_target_train, df_target_test = split_data(df_feature,df_target,random_state=42,test_size=0.2)
+
+
+# normalize the feature using z normalization
+df_feature_train_z,means,stds = normalize_z(df_feature_train)
+
+
+X = prepare_feature(df_feature_train_z)
+target = prepare_target(df_target_train)
+
+iterations = 30000
+alpha = 0.01
+beta = np.zeros((6,1))
+
+# call the gradient_descent function
+beta, J_storage = gradient_descent_linreg(X,target,beta,alpha,iterations)
+
+# call the predict method to get the predicted values
+pred = predict_linreg(df_feature_test,beta)
+
+beta, J_storage = gradient_descent_linreg(X, target, beta, alpha, iterations)
+print(beta)
+
+
+plt.plot(J_storage)
+
+pred = predict_linreg(df_feature_test,beta)
+print(pred)
+
+# Scatter plot to visualize the relationship between predicted and actual values
+plt.scatter(pred,df_target_test)
+
+# This plot helps visually assess how well the model predictions align with the actual values.
+# It allows us to observe if there's a linear relationship between the actual and predicted values.
+# the points follow the black line, representing a perfect alignment between actual and predicted.
+target = np.array(df_target_test)
+sns.regplot(x=target, y=pred, scatter_kws={"color": "skyblue"}, line_kws={"color": "black"})
+plt.xlabel('Actual Values (Target)')
+plt.ylabel('Predicted Values')
+plt.title('Regression Plot: Actual vs Predicted')
+plt.show()
+
+r2 = r2_score(df_target_test, pred)
+
+#Find adjusted r2
+num_data_pts, num_xvariables = df_feature.shape
+adjusted_r2 = 1 - (1-r2) * (num_data_pts-1)/(num_data_pts-num_xvariables-1)
+print(adjusted_r2)
+
+new_nutrients_col=df_nitrogen["Nutrients_N"]+df_potash["Nutrients_P"]+df_phosphate["Nutrients_Ph"]
+
+df_combined_new_nutrients=df_combined.copy()
+df_combined_new_nutrients=df_combined_new_nutrients.drop(['Nutrients_N','Nutrients_Ph','Nutrients_P'],axis=1)
+df_combined_new_nutrients["Total_Nutrients"]=new_nutrients_col
+
+print(df_combined_new_nutrients)
+
+#Build the model 
+
+# get features and targets from data frame
+df_feature_new, df_target_new = get_features_targets(df_combined_new_nutrients,["Rainfall","Temp","Total_Nutrients"],["Yield"])
+
+# split the data into training and test data sets
+df_feature_train_new, df_feature_test_new, df_target_train_new, df_target_test_new = split_data(df_feature_new,df_target_new,random_state=42,test_size=0.2)
+
+
+# normalize the feature using z normalization
+df_feature_train_z_new,means,stds = normalize_z(df_feature_train_new)
+
+
+X_new = prepare_feature(df_feature_train_z_new)
+target_new = prepare_target(df_target_train_new)
+
+iterations_new = 30000
+alpha_new = 0.01
+beta_new = np.zeros((4,1))
+
+# call the gradient_descent function
+beta_new, J_storage_new = gradient_descent_linreg(X_new,target_new,beta_new,alpha_new,iterations_new)
+
+# call the predict method to get the predicted values
+pred_new = predict_linreg(df_feature_test_new,beta_new)
+
+r2_new = r2_score(df_target_test_new, pred_new)
+print("R2 value before seperating n p k content columns : ",r2_new)
+print("R2 value after seperating n p k content columns : ",r2)
+mse_new = mean_squared_error(df_target_test_new, pred_new)
+print("MSE value before seperating n p k content columns : ",mse_new)
+print("MSE value after seperating n p k content columns : ",mse)
+
+
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import make_pipeline
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+degree = 3 
+poly_model = make_pipeline(PolynomialFeatures(degree), LinearRegression())
+features = df_combined[["Rainfall", "Temp", "Nutrients_N", "Nutrients_P", "Nutrients_Ph"]]
+target = df_combined["Yield"]
+
+# Fit the polynomial model
+poly_model.fit(features,target)
+
+# Evaluate the model
+poly_predictions = poly_model.predict(df_feature_test)
+mae_poly = mean_absolute_error(y_true=df_target_test, y_pred=poly_predictions)
+mse_poly = mean_squared_error(y_true=df_target_test, y_pred=poly_predictions)
+r2_poly = r2_score(y_true=df_target_test, y_pred=poly_predictions)
+
+print("Polynomial Model - Mean Absolute Error:", mae_poly)
+print("Polynomial Model - Mean Squared Error:", mse_poly)
+print("Polynomial Model - R-squared:", r2_poly)
